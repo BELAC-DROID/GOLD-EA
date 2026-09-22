@@ -68,7 +68,7 @@ import pandas as pd
 import duckdb
 
 sys.path.insert(0, r"C:\Users\opc\gold_ea\models")
-from spread_model import (SPIKE_TEMPLATE, FAMILY_SCALE_FACTOR, RELEASE_FAMILY,
+from spread_model import (SPIKE_TEMPLATE, FAMILY_SCALE_FACTOR, RELEASE_FAMILY, 
                            EVENT_NAME_WHITELIST, EVENT_CURRENCIES, MIN_OFFSET, MAX_OFFSET)
 
 DB_PATH = r"C:\Users\opc\gold_ea\data\gold_data.db"
