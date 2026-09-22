@@ -398,9 +398,9 @@ Since the baseline generates no trades, it can't be scored on win rate/profit fa
 - Weekend-gap persistence.
 - London/NY conditional regime signal claimed in the original Metric C.
 
-- **Gold/DXY relationship (K, L; 2021-07 to 2025-12):** contemporaneous, strongly negative (1-min correlation -0.38, -0.66 in the 08:25-08:45 New York release window), with no exploitable lead-lag at minute scale. The strength varies a lot by 10-day block (10th/90th percentile -0.69/-0.19) and persists (+0.65 rank correlation between consecutive blocks; volatility-control check pending), and was weakest in 2025 (-0.31). Use the trailing ~10-day correlation as a state variable telling the decision layer how much weight to give a simultaneous DXY move; do not treat DXY as a leading indicator.
+- **Gold/DXY relationship (K, L; 2021-07 to 2025-12):** contemporaneous, strongly negative (1-min correlation -0.38, -0.66 in the 08:25-08:45 New York release window), with no exploitable lead-lag at minute scale. The strength varies a lot by 10-day block (10th/90th percentile -0.69/-0.19) and persists (+0.65 rank correlation between consecutive blocks, confirmed not a volatility artifact - survives controlling for gold's own volatility, +0.61), and was weakest in 2025 (-0.31). Use the trailing ~10-day correlation as a state variable telling the decision layer how much weight to give a simultaneous DXY move; do not treat DXY as a leading indicator.
 
-**Unresolved:** E (distribution-shape stability, descriptive), J spread validation, K volatility-control check, Asian regime lookback sensitivity, D1-scale power, 2026 holdout.
+**Unresolved:** E (distribution-shape stability, descriptive), J spread validation, Asian regime lookback sensitivity, D1-scale power, 2026 holdout.
 
 ---
 

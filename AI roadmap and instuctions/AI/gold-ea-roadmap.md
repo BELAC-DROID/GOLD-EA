@@ -1,191 +1,111 @@
 # XAU/USD Gold EA — Build Roadmap & Progress
 
-*Last updated: 2026-09-21 (Metrics A and B re-tested against a shared 6-combo walk-forward matrix; Metric J (catalyst magnitude) built and completed — Phase 3 now at 10/12; recovered from another session-fork gap where this work wasn't synced to tracking files before the session ended)*
+*Full consolidation — Phase 3 (Test 1) resolved across all 12 design-doc calibration metrics*
 
-This tracks the **infrastructure + baseline-profiler + Test 1 build track** as the single place that stays current across sessions.
-
-**Agreed build order:** Infrastructure → Baseline Profiler → Test 1 (calibration check) → 10 Setups → AI Decision Layer, with Risk Controls built in parallel throughout.
+This is the single technical source of truth for the build. See `gold-ea-progress.md` for a shorter summary and `gold-ea-ai-decision-layer.md` (Section 7.5) for the design-level synthesis of findings.
 
 ---
 
-## Phase 1: Infrastructure — ✅ Functionally complete
+## Phase 1: Infrastructure — ✅ Complete
+Windows Server 2022 VM, Oracle Cloud UK South. Python↔MT5↔Exness verified, timezone confirmed clean. 6 years of Dukascopy tick data loaded and validated (zero duplicates, gap-checked), plus a 2025 reload. Exness tick data pulled, validated against Dukascopy (mid-price matches, spread ~2.5x wider on Dukascopy — decision: train price on Dukascopy, simulate cost via Exness-realistic spread model). A real Exness timestamp bug (seconds mislabeled as milliseconds, causing a ~9M-row false "duplicate" count) was found via audit, fixed, and reloaded — confirmed clean via spot-check. `spread_model.py` built: two-tier (flat baseline + event-spike overlay), refined to a curated 11-event-type whitelist. News calendar loaded (115,627 events, 2019–2026). DXY data sourced later (data section below) after catching and fixing a placeholder-data bug in an early pull.
 
-All prior items still stand (Windows VM, MT5/Python connection, timezone clean, Dukascopy 6-year load, spread model, calendar). Additions this update:
+**Open from Phase 1, still relevant:** `SPIKE_TEMPLATE`'s spike shape was calibrated on exactly one NFP event — Metric J (below) partially validated this against other event types, but full tick-level validation is still outstanding.
 
-### Data quality — bug found and fixed
-- **`audit_ticks.py` on `dukascopy`:** clean — 0 duplicate timestamps; "thin days" all land on 7-day intervals from a Sunday (expected weekend partial-session pattern, not a defect); the D1-count-vs-weekday-count mismatch is explained the same way.
-- **`audit_ticks.py` on `exness_live`: caught a real bug.** All rows collapsed to `1970-01-21` and 9,056,422 "duplicate" timestamps were found. Root cause, confirmed by direct calculation: `timestamp_utc_ms` was actually being stored in **seconds**, not milliseconds — a pandas datetime-resolution inference issue in the loader (`.astype("int64")` on the parsed datetime returned a coarser resolution than assumed, so the `// 1_000_000` conversion produced seconds, not ms). This also fully explains the duplicate count: distinct millisecond-level ticks were collapsing onto the same integer-second value.
-- **Fixed and reloaded, now independently reconfirmed in this thread.** Rerunning `audit_ticks.py exness_live` after the fix:
-  - Date range: `2026-01-01` to `2026-09-18` — correct (was `1970-01-21` before the fix)
-  - Duplicate timestamps: `1,024,603` (down from `9,056,422`) — ~1.44% of rows. **Spot-checked and confirmed genuine:** sample timestamp `1769014746296` holds two distinct bid/ask pairs (`4836.361/4836.521` vs `4836.331/4836.491`) — legitimate same-millisecond quote updates, not a defect.
-  - Thin-day pattern: correctly lands on Sundays and the Jan 1 holiday — expected, not a defect.
-- **✅ Fix fully confirmed — no open items remaining on the Exness reload.**
-
-### 🔲 Not yet done
-- [ ] Validate the spread spike template against a second real event type (CPI/FOMC/PCE)
-- [ ] Confirm MT5 custom-symbol import for in-terminal backtesting
-- [ ] Spot-check a sample Exness duplicate timestamp to confirm genuine differing bid/ask (see above)
+## Phase 2: Baseline Profiler — ✅ Complete, fully verified
+- Session range profile (asian/london/ny mean/median/std/percentiles): trusted.
+- Volatility rhythm profile: a bucketing bug (DuckDB `(x/15)::INT` rounds instead of truncating) was found and fixed; independently spot-checked afterward (three checks all passed, including an exact match on independently-recomputed buckets).
+- Level-reaction: went through 5 rounds of root-caused bugs before reaching a trustworthy original result, then required a further rebuild (`level_reaction_v2.py`) when a price-regime bug was found — fixed $10 level spacing broke down as gold moved from ~$1,300–2,600 (2019–2024) to $3,000–3,700+ (2025). Rebuilt with **price-relative tiering** (tier1 <$3,000: $10/50 spacing; tier2 ≥$3,000: $25/100 spacing), logic extracted into a shared `level_reaction_core.py` module.
 
 ---
 
-## Phase 2: Baseline Profiler — ✅ Complete and fully verified
+## Phase 3: Test 1 — ✅ Resolved, all 12 metrics
 
-All three pieces (session range, level-reaction, volatility rhythm) are now confirmed trusted.
+### Methodology note — read this before trusting any individual metric below
+A significant mid-phase correction happened: several early metrics (A, G, and the original version of I) reported "beats naive/majority" based on **raw win-counts across a 6-combo walk-forward window matrix, with no significance testing**. This methodology was proven to produce false positives when Metric I's original result (claiming volatility clustering vanishes at H1) was traced to a labeling artifact and fully reversed under a corrected test. Following that, Metrics A, C, D, G, H, and I were **re-tested** with real baselines, effect sizes, and bootstrap significance/permutation tests. **The verdicts below are the corrected ones** — where a metric's status differs from an earlier session's first-pass result, the version below supersedes it.
 
-### Session range profile: ✅ trusted (unchanged from before)
+### A — Range prediction: **WITHDRAWN (was a false positive)**
+Original: predicted range as % of prior close, claimed to beat naive lag-1. **Retested** (`range_prediction_v3_baselines.py`) against real baselines — 5-session and 20-session trailing % ranges, not just naive lag-1 — scoring every model on identical test days, with bootstrap CI/p-values instead of a binary flag.
+- **Asian:** model significantly *worse* than both trailing baselines, all 6 combos (~19–24% worse than the 20-session baseline). Even the 5-session baseline beats it. Gap grows with longer rolling training windows — consistent with a "long-run average adapts too slowly" explanation.
+- **London:** no significant difference in any combo.
+- **NY:** baseline ahead in every combo; significant in 4/6 (fixed UTC hours) or 2/6 (local/DST-adjusted hours) — borderline (p≈0.05), treat as weak evidence not strong.
+- **What survives:** the percentage-of-price *form* is still correct (the baseline used it too). What doesn't survive is training-mean averaging over a long window — recent trailing ranges predict tomorrow at least as well, consistent with real volatility clustering.
+- **Recommendation for Phase 4/5:** use a 5–20 session trailing %-of-prior-close range, not a long-window training-mean model — especially not for Asian.
+- **Caveat:** the 6 window combos still overlap heavily (robustness-to-window-choice, not independent replication); Asian preferring the 5-session over 20-session baseline was not pre-committed — don't build on that specific ordering yet.
 
-### Volatility rhythm profile: ✅ fully verified and trusted
-Bug fixed earlier (`floor()` instead of a rounding cast). Independently spot-checked this session via three checks: the `"21:00"` bucket is correctly absent (fully inside the closure); the partial `"20:45"` bucket (13 clean minutes, since the closure starts mid-bucket at minute 1258) shows a sane, proportionally lower range than a full 15-minute window; and two independently-recomputed closure-free buckets (`03:00`, `10:00`) matched the grouped profile's numbers exactly. No open items remaining.
+### B — Level-reaction predictive value: **NULL, holds**
+Tiering (see Phase 2) correctly fixes a real touch-detection frequency artifact (confirmed: 3–8x inflation at fixed $10 spacing above $3,000). But across every walk-forward test run (single-split, then a 6-combo pre-committed matrix), the tiered model has **never** beaten a simpler pooled-soft model at predicting reject/break/consolidate outcomes. Best current explanation: tier2 (≥$3,000 prices) still has far less training history than tier1 (5,372 vs 656 touches) — an "insufficient data" result, not proof tiering can never help. **Use tiering for detection correctness only, not yet for confidence scoring.**
 
-### `level_reaction.py` → `level_reaction_v2.py`: ✅ trusted; refactored into a shared module
-The original 5-round-debugged version (4,945 touches) used a **fixed $10 level spacing**, which breaks down as gold's price moved from ~$1,300–2,600 (2019–2024) to $3,000–3,700+ (2025). Rebuilt with **price-relative tiering**. Major ($50)/minor ($10) stratification found to add no real distinguishing value — dropped from the final report.
+### C — Volatility regime classification: **CONFIRMED, Asian-session only**
+Regime labeled via rolling percentile rank (20th/80th, causal — never a fixed boundary). Original test (single 100-day lookback) showed Asian robust across all window combos, London/NY conditionally real with 3+ year rolling windows. **Retested across lookbacks 60/100/150 days:**
+- **Asian:** real and material at lookback 100 (+3.3% Brier gain, 6/6 combos) and 150 (+2.8%, 4/6), but *not* at 60 (+0.7%, 0/6) — moderate evidence (2 of 3 lookbacks), not the clean sweep first reported.
+- **London/NY:** effectively nothing — gains sit near zero across 18 tests; one isolated "+" is chance-level. **The earlier "3+ year rolling window" claim for London/NY is withdrawn.**
+- **Working hypothesis** (unconfirmed but consistent with A/G): Asian volatility is smooth and persistent; London/NY volatility is spiky and event-driven, so yesterday's session-level regime carries little information there — even though intraday volatility clustering is real for those sessions (see Metric I).
 
-**Confirmed and trusted — final tiered result:**
-```json
-tier1_under_3000 (spacing=$10/50): 5,372 touches, 1,931 days, 2.78/day
-  reject 32.1% (1,725)  break 29.0% (1,560)  consolidate 38.8% (2,087)
-tier2_3000_and_above (spacing=$25/100): 656 touches, 249 days, 2.63/day
-  reject 31.2% (205)  break 28.5% (187)  consolidate 40.2% (264)
-```
-Touches/day is comparable across tiers (2.78 vs 2.63), confirming the tiering fix worked — under the old fixed-$10 scheme, tier2 would have shown inflated frequency.
+### D — Hurst / trend-mean-reversion character: **NULL (was a measurement artifact)**
+Original test showed 17/18 combos with "modest persistence" — later understood to be **mostly a stickiness artifact** from overlapping 60-day Hurst windows (a follow-up check found 87.4% of day-to-day labels were mechanically near-identical). A stride-based fix reduced but didn't fully resolve the concern. **Full redesign** (`trend_character_v3.py`) using rank correlation between non-overlapping 10-day blocks found: rank correlation ≈ −0.02 for both H1 and M30 (95% CIs straddling zero), permutation p≈0.8, and only ~4–5% of blocks show a significant trend/mean-reversion signal — indistinguishable from a random walk at this horizon. **Verdict: no evidence of trend-character persistence.** Test covered one horizon (4 hours) and one block length (~10 days) — doesn't rule out effects at other scales, and says nothing about whether individual breakout setups work through other mechanisms (a Test 2 question).
 
-Logic was then extracted into `models\level_reaction_core.py`, imported by both this script and the Phase 3 walk-forward script (see below), so they can't drift apart the way the walk-forward script originally did. Refactor verified to reproduce identical numbers to the above before trusting anything built on top of it.
+### E — Distribution shape stability: **Descriptive, holds**
+No naive baseline by design. Train-period skew/kurtosis of daily range ratios are consistently high (expected — range is a bounded, fat-tailed statistic), but test-period values are **highly unstable across folds** (Asian test kurtosis ranged from 0.192 to 52.515 across different folds — a real finding about gold's tail behavior changing character over time). Consistent session ordering: **NY most stable, Asian least stable, London in between.** Implication for Phase 4/5: apply session-dependent caution to any position-sizing logic assuming stable tail risk — least confidence in Asian, most in NY. **Script audit still outstanding.**
 
-### Next for Phase 2
-- (none — Phase 2 is complete)
+### F — Weekend gap behavior: **NULL, holds**
+No overlapping-window concern (discrete weekly events). Gap regime (small/normal/large, via rolling percentile) shows **0/6 combos** beating naive majority — naive wins every time. Weekend gap size shows no week-to-week persistence. A clean, trustworthy negative finding.
 
+### G — Session-open prediction: **WITHDRAWN (was a false positive)**
+Same structure as Metric A (percentage-of-prior-close model vs. naive), same weak-baseline problem. Original result: London/NY robust 6/6, Asian 5/6. **Retested with proper baselines** (`session_open_prediction_v3.py`) — the positive claim does not hold up; withdrawn, consistent with Metric A's correction.
 
----
+### H — Anomaly-flagging precision: **CONFIRMED, moderate**
+Two halves: (1) an opening-30-min-range volatility spike flag, and (2) a calendar-proximity flag (importing `spread_model.py`'s actual event whitelist, not a reimplementation). Original test showed strong results in both halves across all sessions (Asian ~3x precision lift on the volatility half; London ~1.7x, NY ~2.2x on the calendar half — Asian correctly showing zero event-days, since US releases don't fall in that UTC window). **Re-verified** (`anomaly_flagging_v2.py`) — holds, but more moderately than the original numbers suggested.
 
-## Phase 3: Test 1 — Understanding — 🔄 In progress, 10 of 12 metrics done
+### I — Cross-timeframe consistency: **FULLY REVERSED**
+This is the metric that triggered the mid-phase methodology correction for the whole project.
+- **Original test:** D1 and H4 robust (6/6 combos beating majority), M30 mixed (4/6), H1 essentially no signal (1/6) — led to a design recommendation of "build volatility-clustering confidence at D1/H4 only, avoid H1."
+- **Problem found:** the regime labels were **time-of-day contaminated** — a bar's label mostly reflected *what hour it was*, not real volatility state (diagnostic: P(label="high") ranged from 0.04 to 0.69 depending on the hour before the fix; flat at ~0.21–0.25 after deseasonalizing). This alone explains most of the apparent "H1 has no signal" result — finer timeframes have more time slots, so the contamination gets worse as granularity increases, exactly matching the original pattern.
+- **Corrected test** (`cross_timeframe_consistency_v2.py`): labels ranked only against the same time-of-day slot's trailing history, tested at three lags (previous bar, same slot previous day, ~23 trading days back — the original horizon). Result: **intraday persistence is real and strongest at short lags** — previous-bar and same-slot-previous-day both significant in all 6 combos at H4, H1, *and* M30 (Brier gains of +4–6%, strongest at the finest timeframes: H1 +4.9%, M30 +6.1%). At the original ~33-day lag, the effect is negligible everywhere (+0.1–0.2%). D1's result is now weak and unresolved (+0.54% at lag-1, not significant) — oddly weak next to the intraday results.
+- **Design implication — supersedes the original:** intraday regime confidence should be built at **short lags** (previous bar / same time-of-day slot), not at long horizons, and works across H1/M30/H4 — not just D1/H4. **The earlier "avoid H1" guidance is withdrawn.**
 
-### Shared walk-forward window matrix — built, applied retroactively to Metrics A and B
-A pre-committed matrix of 6 window schemes (`expanding_test1yr`, `expanding_test6mo`, `rolling_2yr_test1yr`, `rolling_3yr_test1yr`, `rolling_4yr_test1yr`, `rolling_3yr_test6mo`), stepping forward through the full 2019–2026 dataset to generate multiple pooled folds per combo rather than 3 fixed anchor splits. Committed *before* seeing any results, specifically to avoid reintroducing look-ahead bias by picking whichever window scheme happens to perform best after the fact. Built as `backtest/walk_forward_matrix.py`, a shared split generator imported by every metric that needs walk-forward testing — new metrics should use this rather than inventing their own splits.
+### J — Catalyst magnitude prediction: **Partially confirmed, one item open**
+Closes the Phase 1 spread-template debt. Found and fixed a genuine multi-stage duplication bug along the way: the raw event whitelist has 979 rows but only 494 distinct release timestamps (CPI/PCE/FOMC each publish several co-named sub-metrics simultaneously) — two different dedup approaches (before vs. after the price join) converged on the same correct 426-event final dataset, a useful cross-check.
+- **Part 1 (closes the Phase 1 debt):** NFP's magnitude (mean 0.00365) is significantly different from other event families (p<0.0001). Real ordering: **NFP (0.00365) > CPI (0.00328) > FOMC (0.00253) > GDP (0.00150) ≈ PCE (0.00124)**. Applying the NFP-derived `SPIKE_TEMPLATE` uniformly overstates the spread spike for GDP/PCE specifically, moderately for FOMC, roughly fine for CPI.
+- **Part 2:** a per-family average magnitude beats a pooled (family-blind) naive average in all 6 window combos (~5–10% MAE reduction) — confirms the fix is worth making, not just diagnosing the problem.
+- **Recommendation, not yet implemented:** split `SPIKE_TEMPLATE` by release family (NFP/CPI/FOMC roughly full-strength, GDP/PCE roughly half-strength).
+- **⚠️ Still open:** direct validation against Exness tick-level data before actually changing the template in code — needed to confirm the magnitude-level finding translates correctly into the spread model's spike *shape*, not just its average size.
 
-### Metric C: Volatility regime classification — ✅ done, robustly tested
-Regime label (low/normal/high) via rolling percentile rank (20th/80th), recomputed continuously through the dataset — deliberately avoids the fixed-boundary trap found elsewhere this session. Scored as a regime-transition model (P(today's regime | yesterday's regime)) vs. naive majority-class only — a naive "persistence" baseline (today=yesterday) was tried first but dropped: it made a hard, 100%-confident guess compared against soft probability models under Brier scoring, which structurally guarantees the soft model wins regardless of real information content, not a fair comparison.
+### K — DXY correlation-regime tracking: **CONFIRMED, real and robust**
+Built after sourcing and carefully validating DXY data (see Data Sourcing section below).
+- 101 ten-day blocks of hourly gold/DXY returns: mean correlation −0.455 (10th/90th percentile −0.69/−0.19). 94% of block-to-block variation exceeds pure sampling noise.
+- Persistence: one block's correlation predicts the next at Spearman +0.648 (95% CI +0.47 to +0.77, permutation p<0.001).
+- Per-year: −0.42 (2021 H2) / −0.48 / −0.60 / −0.41 / −0.31 (2025, weakest) — a possible gold-DXY decoupling trend in 2025, unconfirmed (no rigorous external source checked yet).
+- **Critical control test** (`dxy_k_vol_control.py`): is this persistence just a volatility-regime effect (since DXY volatility itself is partly a *result* of the coupling)? The clean test — controlling for **gold** volatility only — shows persistence survives essentially intact (+0.606 vs. the raw +0.648, still p<0.001). Gold volatility explains only 3% of block-to-block correlation variance; DXY volatility only 10%. **Verdict: correlation regimes are a genuine, distinct phenomenon — confirmed, fully resolved.**
 
-**Tested across 18 configs (3 lookbacks: 60/100/150 days × 6 window combos):**
-- **Asian: beats majority in 18/18 configs, no exceptions.** Confirmed robust — real, usable volatility clustering.
-- **London/NY: a real but conditional signal.** Beats majority consistently only in the `rolling_3yr` and `rolling_4yr` combos, at every lookback length — never in `expanding` or `rolling_2yr`. Longer training windows (3+ years) are needed to detect the signal; shorter/expanding windows dilute it into noise.
-
-**Design implication for Phase 4/5:** the AI decision layer should default to a 3+ year training window specifically for London/NY volatility-regime confidence — an expanding or short-rolling window would miss a real signal that's there.
-
-
-### Metric B: Level-reaction walk-forward — ✅ done, with a precise, non-obvious finding
-`test1_level_reaction_walkforward.py` was found still using the pre-tiering flat $10 spacing (a third instance of the same fixed-dollar-assumption bug) — rebuilt on the shared `level_reaction_core.py` tiering logic, stratifying by **tier** (not major/minor, consistent with that split adding no value).
-
-**Result:** the tier-stratified model never beat the pooled-soft (no-tier-split) baseline across any of the 3 splits — Split 1/2 showed exact equality, Split 3 showed the model losing.
-
-**Robustness check — pre-committed 6-combo window matrix (expanding 1yr/6mo test; rolling 2/3/4yr train × 1yr/6mo test), applied to both metrics, per the research-backed critique that a single window choice risks being an artifact rather than a real result:**
-
-**Range prediction:** London and NY beat naive across **all 6 combos** — robust, trustworthy. Asian session beats naive in 4/6 combos but **loses to naive specifically in `rolling_3yr_test1yr` and `rolling_4yr_test1yr`** — longer rolling training windows consistently hurt Asian, shorter/expanding windows don't. **Revised, more precise conclusion:** trust the percentage model for London/NY; treat Asian as genuinely unproven, not just "mildly weaker," until this pattern is understood further.
-
-**Level-reaction tiering:** model **never** beats pooled-soft in any of the 6 combos (consistent ~0.001–0.002 Brier gap every time, not just in the one earlier split). Strongly confirms — not just single-split-suggests — that tiering hasn't demonstrated predictive value, still attributed to tier1 (5,372 touches) vastly outnumbering tier2 (656) in the pooled data. Keep tiering for touch-detection correctness; don't use it for confidence scoring yet.
-
-### Metric A: Range prediction — rebuilt from fixed-dollar to percentage-of-price
-The original walk-forward test used a fixed mean-dollar-range prediction learned from the training period — this failed badly on Split 3 (2025 test period) for the same root reason as the level-spacing bug: a fixed dollar figure learned at 2019–2024 prices doesn't transfer to 2025's much higher price level.
-
-**Fix (`test1_range_prediction_v2.py`):** predict range as a **percentage of prior close** (not same-day price, to avoid lookahead — yesterday's closing price is genuinely known before the test day starts), learned from the training period's ratio, applied to each test day's own prior close.
-
-**Full walk-forward result:**
-
-| Split | Test period | Session | Old fixed-$ MAE | New %-model MAE (95% CI) | Naive MAE | Verdict |
-|---|---|---|---|---|---|---|
-| 1 | 2023 | asian | 3.627 | 4.275 (3.84–4.81) | 4.246 | worse than naive, worse than old model |
-| 1 | 2023 | london | 6.407 | 6.871 (6.20–7.56) | 8.384 | beats naive, worse than old model |
-| 1 | 2023 | ny | 6.598 | 6.892 (6.27–7.55) | 8.298 | beats naive, worse than old model |
-| 2 | 2024 | asian | 6.464 | 5.307 (4.63–6.06) | 6.334 | beats naive, beats old model |
-| 2 | 2024 | london | 8.760 | 7.874 (6.96–8.85) | 10.714 | beats naive, beats old model |
-| 2 | 2024 | ny | 9.140 | 8.331 (7.39–9.34) | 10.618 | beats naive, beats old model |
-| 3 | 2025→now | asian | 22.179 | 15.040 (13.07–17.19) | 13.789 | worse than naive, **beats old model by ~32%** |
-| 3 | 2025→now | london | 21.151 | 13.728 (11.56–16.10) | 17.049 | beats naive, **beats old model by ~35%** |
-| 3 | 2025→now | ny | 21.214 | 13.999 (12.11–16.20) | 16.437 | beats naive, **beats old model by ~34%** |
-
-**Honest read, not just the win:** Split 3 (the case that mattered most, since it's the regime the setups will actually trade in) improved dramatically — ~30–35% error reduction across all sessions. But Split 1 showed the percentage model losing to the old fixed-dollar model, especially in `asian`. This is a genuine bias-variance tradeoff, not a bug: fixed-dollar is low-variance but systematically wrong once price has moved; percentage-of-price rescales correctly for regime shift but adds day-to-day noise when the test period's price is comparatively range-bound.
-
-**Confirmed and sharpened by the 6-combo window matrix (see below):** this isn't just a Split-1 quirk — Asian session genuinely, structurally underperforms naive under longer rolling training windows specifically, while London/NY are robust across every combo tested. **Revised verdict:** trust the percentage model for London and NY; treat Asian as unproven, not just weaker, pending further investigation.
-
-**Possible future refinement (not urgent):** a blended model weighting percentage vs. fixed-dollar based on how far the test period's price has drifted from the training average — flagged as an option, not built, pending whether the Split-1-style tradeoff actually matters once Phase 4 setups exist.
+### L — DXY lead-lag alignment: **NULL — no usable predictive signal**
+Built alongside K, after a dedicated **timestamp alignment check** (`dxy_alignment_check.py`) confirmed the gold and DXY feeds are genuinely clock-aligned (correlation peaks exactly at lag 0, both winter and summer, both series correctly peaking at the known NY 8:30/10:00 release times) — ruling out an MT5 server-time offset that could have silently corrupted this metric.
+- Contemporaneous correlation is strong: −0.38 overall, −0.66 in the NY 08:25–08:45 release window.
+- **All lagged correlations are essentially zero** (≤0.011 in magnitude) at every tested lag from −10 to +10 minutes, overall and both inside/outside the release window.
+- The only detectable asymmetry is a statistically real but economically negligible 1-minute gold-leads-DXY effect (~0.01% of variance) — plausibly explained by DXY being a synthetic FX-quote-derived index that updates a beat later.
+- **Verdict:** DXY is not a leading indicator at retail latency. It's a strong *simultaneous* read on whether a gold move is dollar-driven — a filter idea for Phase 4 setup logic, not a predictive signal.
 
 ---
 
-### Metric D: Hurst / trend-mean-reversion character — ✅ done, with a caught-and-fixed measurement artifact
-First version tested **day-to-day** regime transitions using a 60-day overlapping Hurst window — looked dramatic (6/6 combos beat majority, margins like 0.21 vs 0.52), but a stickiness check revealed why: 87.4% of consecutive labels were mechanically identical, since 59/60 days of underlying return data overlap between one day's window and the next. The "beats majority" result was mostly re-discovering window overlap, not real trend-character persistence.
+## Data Coverage Gap
+Gold minute data currently ends **2025-12-31**; DXY data runs to **2026-09-21**. Every Test 1 metric except K/L (which use the DXY/gold overlap, 2021-07-19 to 2025-12-31) is based on 2019–2025 data only — **nothing above has been tested against 2026 data yet.** Open, undecided question: deliberately hold out the 2026 Exness data as a genuine unseen final-confirmation set for the key findings — it's a different feed from the Dukascopy data everything above was trained on, so this needs careful handling, not a casual reuse.
 
-**Fix:** test transitions **20 days apart** instead of 1, so compared windows share far less overlapping data. Re-ran the stickiness check at the new stride: 57.6% unchanged vs. a calculated 47.3% chance baseline (from the regime distribution's base rates) — a real ~10-point excess, but the two windows still share two-thirds of their data at this stride, so the effect is likely still somewhat inflated by residual overlap, not a fully clean measurement.
+## DXY Data Sourcing — validated, for reference
+- `dxy_d1_ohlc`: 2,361 daily bars, 2019-03-01 to 2026-09-21.
+- `dxy_m1_ohlc`: 1,921,828 intraday bars, 2021-07-19 to 2026-09-21 (earlier history unavailable at minute resolution).
+- **A real defect was caught and fixed along the way:** an early M1 pull contained placeholder (non-real) data for part of its range; fixing it initially also accidentally deleted the only daily-resolution source alongside the bad intraday data — caught and corrected before it could propagate into K/L.
+- Final validation: zero flat (open=high=low=close) bars, and the year-by-year close-price trajectory matches real DXY history closely (~97–98 in 2019, dropping to ~89 during 2020–2021 COVID-era dollar weakness, surging to a 114.12 high in 2022 matching the real Fed-hiking-cycle multi-year high, settling 100–108 through 2023–2025) — confirmed genuine, not synthetic or corrupted.
+- Timestamp alignment with gold confirmed clean (see Metric L above) — no clock offset, no DST-driven drift.
 
-**Final result:** 17/18 combos beat majority (NY's `rolling_2yr_test1yr` is a genuine exception, not hidden). **Verdict:** trend/mean-reversion character shows real but modest persistence — usable, but should carry less confidence weight than Metric C's Asian result, which had no overlap concern to begin with.
-
-### Metric F: Weekend gap behavior — ✅ done, clean negative result
-No overlapping-window concern (discrete weekly events). **0/6 combos beat majority** — naive majority wins every time. **Weekend gap size shows no week-to-week persistence** — a trustworthy negative finding, not a bug or a thin-sample artifact.
-
-### Metric E: Distribution shape stability — ✅ done, a genuinely important descriptive finding
-No naive baseline by design — descriptive, not scored pass/fail. Train-period skew/kurtosis are consistently very high (expected — range is a bounded, fat-tailed statistic), but **test-period values are highly unstable across folds**: Asian's test kurtosis ranges from `0.192` to `52.515` depending on which 6-month fold, a ~270x spread from the same instrument. This is a genuine finding about gold's tail behavior changing character over time, not noise.
-
-**Clear, consistent session ordering across nearly every window scheme:**
-- **NY: most stable** (best case `rolling_2yr_test1yr`: |skew diff|=0.449, |kurt diff|=3.327)
-- **Asian: least stable** (worst case `expanding_test6mo`: |skew diff|=1.471, |kurt diff|=13.693)
-- **London: in between**
-
-**Implication for Phase 4/5:** position-sizing/risk logic (Section 8) assuming stable tail risk should apply that assumption with the least confidence to Asian-session trades and the most to NY-session trades — session-dependent caution, not a uniform risk treatment.
-
-### Metric G: Session-open prediction — ✅ done, clean, with a notable cross-metric pattern
-Fixed the f-string bug (`{OPEN_WINDOW_MINUTES * 0.5}`), reran clean. **London/NY beat naive in all 6 combos** — robust. **Asian beats naive in 5/6**, losing only in `rolling_4yr_test1yr` (razor-thin margin: 2.5222 vs 2.5029).
-
-**Cross-metric pattern worth naming explicitly:** this is the same session and the same long-rolling-window territory where Metric A's percentage-based range model also broke down (Metric A lost in Asian's `rolling_3yr_test1yr` *and* `rolling_4yr_test1yr`). Two independent metrics now point at the same structural weakness: **percentage-of-price models for the Asian session specifically degrade under longer rolling training windows.** Worth actively checking for this in any future Asian-session percentage-based metric, not re-discovering it separately each time.
-
-### Metric H: Anomaly-flagging precision — ✅ done, both halves, robust
-**Volatility-spike half:** flags a day when its opening 30-min range exceeds the 90th percentile of a trailing window; ground truth is the same session's full-day "high" regime label from Metric C. **Beats base rate in all 18 tests** (3 sessions × 6 combos). Asian shows the strongest lift (~3x: precision 0.61–0.69 vs. ~0.22–0.24 base) — notably, Asian is the *strongest* performer here, not the weak link seen in Metrics A/G, confirming that pattern is specific to percentage-of-price/long-rolling-window models, not Asian sessions generally.
-
-**Calendar-proximity half:** flags a day when a `spread_model.py`-whitelisted high-impact event (imported directly, not duplicated) falls inside that session's UTC window. **Asian correctly shows 0 event-days** — all whitelisted events are US releases (NFP, CPI, FOMC, GDP) whose UTC times never fall in the 00:00–08:00 window; this is the expected, correct result, not a bug. **London (358 event-days): ~1.7x lift, robust across all 6 combos. NY (178 event-days): ~2.2x lift, the strongest of the two sessions, also robust.**
-
-### Metric I: Cross-timeframe consistency — ✅ done, extended to all 4 available timeframes
-Design doc named H1/H4; extended to include M30 and D1 too (already-built tables, no extra cost, and a more complete generalization claim than just two arbitrarily-named timeframes). M15 excluded as circular — Metric C was built from M15-derived data.
-
-**Result — a clean, monotonic timescale gradient:**
-```
-D1:  6/6 beats majority (robust)
-H4:  6/6 beats majority (robust)
-M30: 4/6 beats majority (mixed)
-H1:  1/6 beats majority (essentially no signal — model≈majority to the 4th decimal)
-```
-Volatility clustering weakens steadily as granularity gets finer and essentially vanishes at H1 — consistent across all 6 window combos at every timeframe, not a one-off. D1's small total bar count (2,171) raised a legitimate thinness concern beforehand, but resolved cleanly — n_test values were proportionally healthy, no issue.
-
-**Design implication for Phase 4/5:** build volatility-clustering confidence signals at D1/H4 granularity only. Hourly-resolution (H1) regime confidence would not be supported by real signal per this data — using it would manufacture false confidence from noise.
-
-### Metric J: Catalyst magnitude prediction — ✅ done, closes a real Phase 1 debt item
-Tests whether `spread_model.py`'s `SPIKE_TEMPLATE` (calibrated on exactly one NFP event, applied uniformly to all 11 whitelisted event types since Phase 1) is actually a reasonable stand-in for every event type — flagged as unvalidated back in Phase 1 and never revisited until now.
-
-**3 rounds of dedup bugs, root-caused via staged diagnostic before trusting any result:**
-1. v1 didn't dedup calendar events sharing an exact release timestamp at all — CPI/PCE/FOMC families routinely publish several named sub-metrics simultaneously (979 raw rows, only 494 distinct timestamps) → inflated to 2,595 rows once joined to price data.
-2. v2 deduped *after* the price joins — by then the duplicate timestamps had already fanned out combinatorially in the join (2 dupes × 2 dupes = 4 rows, not 2) → still wrong (426, should be ≤494).
-3. v3 fixed it by deduplicating the events table *before* any price join — the correct approach. Interestingly, v2 and v3's final numbers matched byte-for-byte anyway, since the duplicate rows all carried identical real price values; post-hoc dedup accidentally landed on the same answer as pre-hoc dedup. Confirmed via two independent code paths reaching the same number, not just assumed correct.
-
-**One other correction worth naming:** the original plan was to validate against `spread_model.py`'s reported "979 events" figure — that was the wrong target. 979 is Phase 1's intentionally-undeduplicated raw count (fine for its own nearest-event-lookup use case); the correct deduplicated release-moment count is 494.
-
-**Final result: 426 usable events** (±2min pre / +8min post-release price moves), grouped by release family (NFP/CPI/FOMC/GDP/PCE).
-
-**Part 1 — does NFP's magnitude generalize to the other event types?** No — confirmed with **p<0.0001** (Welch's t-test, NFP vs. all others pooled). Magnitude ordering: NFP (mean 0.365% of price) > CPI (0.328%) > FOMC (0.253%) > GDP (0.150%) ≈ PCE (0.124%). GDP and PCE move gold less than half as much as NFP; CPI is the closest match; FOMC is moderately overstated by the current uniform template.
-
-**Part 2 — does knowing the release family actually improve prediction, or is this just "NFP is different" trivia?** Tested against the same 6-combo window matrix: **per-family average magnitude beats pooled naive in all 6 combos**, consistent ~5–10% MAE reduction. This is the evidence needed to justify actually changing `spread_model.py`, not just a descriptive curiosity.
-
-**Concrete recommendation, not yet implemented:** split `SPIKE_TEMPLATE` by release family — keep NFP/CPI/FOMC near full strength, scale GDP/PCE to roughly half strength, rather than applying one NFP-derived shape uniformly across all 11 whitelisted event types.
+## Open Items, in priority order
+1. **Metric J tick-level spread validation** — last open Phase 3 item, needed before implementing the `SPIKE_TEMPLATE` release-family split
+2. Decide on the 2026 Exness holdout question
+3. Script audits for Metrics E and J
+4. DST/daylight-saving check for Metrics B and E specifically — session-boundary correctness around clock changes already proved material for Metrics A and I
+5. Begin Phase 4 (the 10 setups) design — every confirmed/withdrawn finding above is now a real, evidence-based design constraint, not a placeholder assumption
 
 ## Phase 4: The 10 Setups — ⬜ Not started
-
-
 ## Phase 5: AI Decision Layer — ⬜ Not started
 ## Risk Controls — ⬜ Not started (build in parallel with Phase 4, not after)
 
----
-
-## Open risks carried forward
-- **Session fork risk — actively demonstrated this round:** the Exness timestamp fix, the level-reaction price-tiering fix, and the range-prediction percentage fix all happened in a session that then got cut off mid-update, before its own tracking-file sync completed. This document is the recovery/consolidation of that work — a reminder that the fork risk isn't just theoretical.
-- **A general pattern worth naming explicitly:** two separate bugs this round (level spacing, range prediction) had the *same root cause* — a fixed-dollar assumption breaking as gold's price level shifted. Worth checking whether any other planned metric (e.g. catalyst magnitude, distribution shape) has a similar implicit fixed-dollar assumption baked in before building it, rather than discovering it the same way a third time.
-- **Compute sizing, spread-transfer assumption:** unchanged from before.
-
-## Immediate next steps (in order)
-1. Implement Metric J's recommendation in `spread_model.py` — split `SPIKE_TEMPLATE` by release family (NFP/CPI/FOMC full strength, GDP/PCE ~half strength) instead of one uniform NFP-derived shape.
-2. Source DXY historical data as a single dedicated task, then build correlation-regime tracking + lead-lag alignment together (Metrics K/L, the last 2 of 12) — Phase 3 will be complete after these two.
-3. When Phase 4/5 design starts, apply: 3+ year training window for London/NY volatility-regime confidence (Metric C); weight Metric D's persistence signal lower than Metric C's, given the residual-overlap caveat; treat weekend gap size as non-predictive (Metric F); apply session-dependent tail-risk caution per Metric E (least confidence in Asian, most in NY); avoid long rolling windows for Asian-session percentage-based models (Metrics A, G); anomaly-flagging (Metric H) is a genuinely strong, robust confidence signal across all sessions; build volatility-clustering confidence at D1/H4 granularity only, never H1 (Metric I); use per-release-family magnitude, not a uniform NFP-derived shape, for catalyst-driven position sizing (Metric J).
+## Standing Lesson, Worth Carrying Into Every Future Phase
+The single most important methodological finding of Phase 3 isn't any individual metric — it's that **"beats naive/majority" claims built on raw win-counts without a real baseline and a significance/effect-size check produced multiple false positives** (Metrics A, G, and the original version of I). Every one of those was only caught by deliberately going back and re-testing with harder, more honest comparisons. Apply the same discipline to Phase 4 setup backtesting and Phase 5's AI confidence scoring from the start, rather than discovering the same failure mode a fourth time.
