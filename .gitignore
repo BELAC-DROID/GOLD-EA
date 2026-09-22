@@ -1,0 +1,64 @@
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Databases and SQLite sidecar files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.duckdb
+*.duckdb.wal
+
+# Raw downloads, exports, and large local datasets
+downloads/
+*.zip
+*.parquet
+*.feather
+*.pkl
+*.pickle
+
+# Tick/calendar CSV exports and generated snapshots
+archive/*.csv
+data/**/*.csv
+data/spread_check/
+*.ticks.csv
+*_tick_*.csv
+*_ticks_*.csv
+
+# Generated backtest reports
+backtest/*_results.csv
+backtest/*_blocks.csv
+
+# Runtime logs and local notes
+logs/*
+!logs/.gitkeep
+*.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo

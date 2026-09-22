@@ -1,0 +1,26 @@
+{
+  "asian": {
+    "mean_range": 11.479,
+    "median_range": 9.735,
+    "std_range": 7.183,
+    "p10": 5.073,
+    "p90": 19.326,
+    "n_days": 1548
+  },
+  "london": {
+    "mean_range": 19.032,
+    "median_range": 16.822,
+    "std_range": 10.991,
+    "p10": 8.167,
+    "p90": 30.948,
+    "n_days": 1548
+  },
+  "ny": {
+    "mean_range": 17.846,
+    "median_range": 15.425,
+    "std_range": 10.669,
+    "p10": 7.566,
+    "p90": 30.426,
+    "n_days": 1548
+  }
+}

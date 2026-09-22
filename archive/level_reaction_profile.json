@@ -1,0 +1,51 @@
+{
+  "params": {
+    "level_spacing": 10,
+    "away_threshold": 3.0,
+    "away_lookback_minutes": 5,
+    "outcome_threshold": 2.0,
+    "lookahead_minutes": 15
+  },
+  "all_levels": {
+    "break": {
+      "count": 1443,
+      "pct": 29.2
+    },
+    "consolidate": {
+      "count": 1927,
+      "pct": 39.0
+    },
+    "reject": {
+      "count": 1575,
+      "pct": 31.9
+    }
+  },
+  "major_levels_50": {
+    "reject": {
+      "count": 275,
+      "pct": 30.3
+    },
+    "consolidate": {
+      "count": 369,
+      "pct": 40.6
+    },
+    "break": {
+      "count": 265,
+      "pct": 29.2
+    }
+  },
+  "minor_levels_10": {
+    "break": {
+      "count": 1178,
+      "pct": 29.2
+    },
+    "consolidate": {
+      "count": 1558,
+      "pct": 38.6
+    },
+    "reject": {
+      "count": 1300,
+      "pct": 32.2
+    }
+  }
+}
