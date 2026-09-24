@@ -87,40 +87,86 @@ def get_coverage(con):
 
 
 def get_event_groups(con, lo_ms, hi_ms):
-    """One row per distinct whitelisted-event timestamp in [lo, hi], with the
-    family spread_model.py's own nearest_event_group() would report (max
-    scale factor among event names sharing that timestamp)."""
+    """Groups whitelisted events into analysis anchors, in two steps:
+
+    Step 1 - exact-timestamp collisions (spread_model.py's own
+    nearest_event_group() logic): family = whichever event name sharing
+    that timestamp has the larger FAMILY_SCALE_FACTOR. NOTE (found
+    2026-09-21 on real data): the module's own docstring says GDP q/q and
+    Core PCE Price Index y/y are routinely released together by the BEA -
+    since GDP's scale (0.41) beats PCE's (0.34), every such co-release gets
+    labelled "GDP", not "PCE". This is exactly why GDP shows ~9 events
+    (expected ~3-4 for a purely quarterly release) while PCE showed only 1:
+    it is PRODUCTION'S OWN real behaviour, not a script bug - reported below
+    via merged_names so you can see which "GDP" anchors actually co-released
+    with PCE.
+
+    Step 2 - near-timestamp merge (validation-only, NOT present in
+    spread_model.py): groups within MIN_SPACING_MIN of each other are
+    merged into one anchor at the EARLIER timestamp. Needed because FOMC's
+    two whitelisted releases (Statement, then Press Conference ~30 min
+    later) land at DIFFERENT timestamps - without this, both halves fail
+    the spacing filter against each other and FOMC silently has 0 usable
+    events (found 2026-09-21: exactly what happened). This is a
+    simplification: SPIKE_TEMPLATE assumes one release moment, but FOMC
+    genuinely has two, each of which can move price/spread; anchoring to
+    the earlier one (the Statement) may understate the Press Conference's
+    own effect if it habitually moves markets more.
+
+    A final spacing check (same MIN_SPACING_MIN) runs on the MERGED anchors
+    as a residual safety net - should rarely trigger since the merge step
+    already absorbed anything closer than that.
+    """
     name_ph = ",".join("?" for _ in EVENT_NAME_WHITELIST)
     curr_ph = ",".join("?" for _ in EVENT_CURRENCIES)
-    rows = con.execute(f"""
+    raw = con.execute(f"""
         SELECT timestamp_utc_ms, list(event_name) AS names
         FROM calendar_events
         WHERE event_name IN ({name_ph}) AND currency IN ({curr_ph})
           AND timestamp_utc_ms BETWEEN ? AND ?
         GROUP BY timestamp_utc_ms ORDER BY timestamp_utc_ms
     """, (*EVENT_NAME_WHITELIST, *EVENT_CURRENCIES, lo_ms, hi_ms)).fetchdf()
-    if rows.empty:
-        return rows
-    fam_fallback = []
-    families, scales = [], []
-    for names in rows["names"]:
-        fams = [RELEASE_FAMILY.get(n, "NFP") for n in names]
-        fam_fallback.append(any(n not in RELEASE_FAMILY for n in names))
+    if raw.empty:
+        return raw
+
+    ts_list, names_list = raw["timestamp_utc_ms"].tolist(), raw["names"].tolist()
+    clusters = [{"ts": ts_list[0], "all_names": list(names_list[0]), "member_ts": [ts_list[0]]}]
+    for t, names in zip(ts_list[1:], names_list[1:]):
+        if (t - clusters[-1]["member_ts"][-1]) < MIN_SPACING_MIN * 60000:
+            clusters[-1]["all_names"].extend(names)
+            clusters[-1]["member_ts"].append(t)
+        else:
+            clusters.append({"ts": t, "all_names": list(names), "member_ts": [t]})
+
+    rows = []
+    for c in clusters:
+        fams = [RELEASE_FAMILY.get(n, "NFP") for n in c["all_names"]]
+        fallback = any(n not in RELEASE_FAMILY for n in c["all_names"])
         fam = max(fams, key=lambda f: FAMILY_SCALE_FACTOR.get(f, 1.0))
-        families.append(fam)
-        scales.append(FAMILY_SCALE_FACTOR.get(fam, 1.0))
-    rows["family"] = families
-    rows["scale"] = scales
-    rows["fallback_used"] = fam_fallback
-    ts = rows["timestamp_utc_ms"].values
+        rows.append({"timestamp_utc_ms": c["ts"], "merged_names": c["all_names"],
+                     "family": fam, "scale": FAMILY_SCALE_FACTOR.get(fam, 1.0),
+                     "fallback_used": fallback, "n_merged": len(c["member_ts"])})
+    out = pd.DataFrame(rows)
+    ts = out["timestamp_utc_ms"].values
     weekday_ok = pd.to_datetime(ts, unit="ms", utc=True).dayofweek < 5
     spacing_ok = np.ones(len(ts), dtype=bool)
     if len(ts) > 1:
         gaps_min = np.diff(ts) / 60000.0
         spacing_ok[:-1] &= gaps_min >= MIN_SPACING_MIN
         spacing_ok[1:] &= gaps_min >= MIN_SPACING_MIN
-    rows["kept"] = weekday_ok & spacing_ok
-    return rows
+    out["kept"] = weekday_ok & spacing_ok
+    out["reason"] = np.where(out["kept"], "kept",
+                             np.where(~weekday_ok, "weekend", "still_too_close_after_merge"))
+    return out
+
+
+def print_event_diagnostics(groups):
+    print("\nall event anchors (post-merge) and why kept/dropped:")
+    for _, r in groups.iterrows():
+        names = ", ".join(r["merged_names"])
+        flag = " <- multiple releases merged" if r["n_merged"] > 1 else ""
+        print(f"  {pd.to_datetime(r['timestamp_utc_ms'], unit='ms', utc=True)}  "
+              f"family={r['family']:5s}  [{names}]  {r['reason']}{flag}")
 
 
 def load_source_ticks(con, source=SOURCE):
@@ -142,9 +188,12 @@ def load_source_ticks(con, source=SOURCE):
 
 
 def event_multipliers(ts, spread, ts_ms):
-    """Returns (baseline, {offset: mean_mult}) or None if too little data.
-    ts, spread: full sorted arrays from load_source_ticks(). Uses
-    np.searchsorted (O(log n)) instead of a SQL query per event."""
+    """Returns (baseline, {offset: (mean_mult, max_mult)}) or None if too little
+    data. ts, spread: full sorted arrays from load_source_ticks(). Uses
+    np.searchsorted (O(log n)) instead of a SQL query per event.
+    max_mult = the single largest tick spread in that offset's minute bucket,
+    divided by baseline - the real-data equivalent of SPIKE_TEMPLATE's second
+    (worst_case) column."""
     lo = ts_ms + BASELINE_START_MIN * 60000
     hi = ts_ms + BASELINE_END_MIN * 60000
     i0, i1 = np.searchsorted(ts, [lo, hi])
@@ -166,7 +215,7 @@ def event_multipliers(ts, spread, ts_ms):
         s = win_spread[offsets == off]
         if len(s) < MIN_OFFSET_TICKS:
             continue
-        mults[off] = float(s.mean()) / baseline
+        mults[off] = (float(s.mean()) / baseline, float(s.max()) / baseline)
     return baseline, mults
 
 
@@ -197,6 +246,7 @@ def main(con=None):
     if groups["fallback_used"].any():
         print(f"WARNING: {int(groups['fallback_used'].sum())} event(s) had a name not in RELEASE_FAMILY "
               f"and fell back to family='NFP' (scale=1.00) - check these event names.")
+    print_event_diagnostics(groups)
 
     per_event = []   # family, offset, mult
     baselines = []
@@ -207,8 +257,9 @@ def main(con=None):
             continue
         baseline, mults = res
         baselines.append({"family": row["family"], "ts": row["timestamp_utc_ms"], "baseline": baseline})
-        for off, m in mults.items():
-            per_event.append({"family": row["family"], "ts": row["timestamp_utc_ms"], "offset": off, "mult": m})
+        for off, (mean_m, max_m) in mults.items():
+            per_event.append({"family": row["family"], "ts": row["timestamp_utc_ms"], "offset": off,
+                              "mult": mean_m, "max_mult": max_m})
     if not per_event:
         print("No events had usable tick coverage.")
         return
@@ -228,36 +279,46 @@ def main(con=None):
     nfp = pe[pe["family"] == "NFP"]
     n_nfp = nfp["ts"].nunique()
     print(f"NFP events used: {n_nfp}")
-    print(f"{'offset':>6s} {'template':>9s} {'observed':>9s} {'95% CI':>17s} {'n_ev':>5s}  in_CI")
+    print(f"{'offset':>6s} {'tmpl_mean':>9s} {'obs_mean':>9s} {'95% CI':>17s} {'tmpl_max':>9s} {'obs_max':>9s} {'95% CI':>17s} {'n_ev':>5s}")
+    nfp_row = {}
     for off in range(MIN_OFFSET, MAX_OFFSET + 1):
         vals = nfp.loc[nfp["offset"] == off, "mult"].values
-        tmpl = SPIKE_TEMPLATE[off][0]
+        maxvals = nfp.loc[nfp["offset"] == off, "max_mult"].values
+        tmpl_mean, tmpl_max = SPIKE_TEMPLATE[off]
         mean, lo, hi = cluster_bootstrap_mean(vals)
-        in_ci = (lo <= tmpl <= hi) if not np.isnan(lo) else None
-        print(f"{off:6d} {tmpl:9.3f} {mean:9.3f} [{lo:6.3f},{hi:6.3f}] {len(vals):5d}  {in_ci}")
-        rows_out.append({"question": "Q1_shape", "family": "NFP", "offset": off, "template": tmpl,
-                         "observed_mean": mean, "ci_lo": lo, "ci_hi": hi, "n_events": len(vals), "in_ci": in_ci})
+        maxmean, maxlo, maxhi = cluster_bootstrap_mean(maxvals)
+        print(f"{off:6d} {tmpl_mean:9.3f} {mean:9.3f} [{lo:6.3f},{hi:6.3f}] "
+              f"{tmpl_max:9.3f} {maxmean:9.3f} [{maxlo:6.3f},{maxhi:6.3f}] {len(vals):5d}")
+        nfp_row[off] = {"obs_mean": mean, "obs_max": maxmean, "raw_max_range": (float(maxvals.min()), float(maxvals.max())) if len(maxvals) else (np.nan, np.nan)}
+        rows_out.append({"question": "Q1_shape", "family": "NFP", "offset": off, "template_mean": tmpl_mean,
+                         "observed_mean": mean, "ci_lo": lo, "ci_hi": hi, "template_max": tmpl_max,
+                         "observed_max": maxmean, "max_ci_lo": maxlo, "max_ci_hi": maxhi, "n_events": len(vals)})
 
     # ---------------- Q2: family scale factor at the peak offset ----------------
-    print("\n" + "=" * 90)
+    print("\n" + "=" * 98)
     print("Q2 - does FAMILY_SCALE_FACTOR (derived from Metric J PRICE-magnitude ratios) predict")
     print("     observed SPREAD widening at the peak offset (0)?")
-    print("=" * 90)
+    print("=" * 98)
     nfp_peak_tmpl = SPIKE_TEMPLATE[0][0]
-    print(f"{'family':>6s} {'declared_scale':>14s} {'predicted':>10s} {'observed':>9s} {'95% CI':>17s} "
+    nfp_vals0 = pe.loc[(pe["family"] == "NFP") & (pe["offset"] == 0), "mult"].values
+    nfp_obs_mean, nfp_obs_lo, nfp_obs_hi = cluster_bootstrap_mean(nfp_vals0)
+    print(f"(NFP template peak = {nfp_peak_tmpl:.3f}; NFP OBSERVED peak = {nfp_obs_mean:.3f} "
+          f"[{nfp_obs_lo:.3f},{nfp_obs_hi:.3f}] - Q2 below compares every family against the OBSERVED")
+    print(f" NFP peak, not the template value, since the template may itself be miscalibrated (see Q1))")
+    print(f"\n{'family':>6s} {'declared':>9s} {'pred_vs_obsNFP':>15s} {'observed':>9s} {'95% CI':>17s} "
           f"{'n_ev':>5s} {'in_CI':>6s} {'implied_scale':>13s}")
     for fam in sorted(pe["family"].unique()):
         vals = pe.loc[(pe["family"] == fam) & (pe["offset"] == 0), "mult"].values
         n_ev = pe.loc[(pe["family"] == fam), "ts"].nunique()
         declared = FAMILY_SCALE_FACTOR.get(fam, 1.0)
-        predicted = 1 + declared * (nfp_peak_tmpl - 1)
+        predicted = 1 + declared * (nfp_obs_mean - 1)      # <- corrected: vs OBSERVED NFP, not template
         mean, lo, hi = cluster_bootstrap_mean(vals)
         in_ci = (lo <= predicted <= hi) if not np.isnan(lo) else None
-        implied = (mean - 1) / (nfp_peak_tmpl - 1) if not np.isnan(mean) else np.nan
-        print(f"{fam:>6s} {declared:14.2f} {predicted:10.3f} {mean:9.3f} [{lo:6.3f},{hi:6.3f}] "
+        implied = (mean - 1) / (nfp_obs_mean - 1) if not np.isnan(mean) else np.nan
+        print(f"{fam:>6s} {declared:9.2f} {predicted:15.3f} {mean:9.3f} [{lo:6.3f},{hi:6.3f}] "
               f"{n_ev:5d} {str(in_ci):>6s} {implied:13.2f}")
         rows_out.append({"question": "Q2_scale", "family": fam, "offset": 0, "declared_scale": declared,
-                         "predicted": predicted, "observed_mean": mean, "ci_lo": lo, "ci_hi": hi,
+                         "predicted_vs_observed_nfp": predicted, "observed_mean": mean, "ci_lo": lo, "ci_hi": hi,
                          "n_events": len(vals), "in_ci": in_ci, "implied_scale": implied})
 
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spread_model_validation_results.csv")
@@ -267,6 +328,45 @@ def main(con=None):
     print("measured spread widening for that family. implied_scale is what the spread data alone would")
     print("suggest for FAMILY_SCALE_FACTOR - compare it directly to declared_scale. Families with few events")
     print("(GDP is quarterly - expect ~2-3 in an 8-month window) will have wide CIs; read those cautiously.")
+
+    # ---------------- proposed corrected constants, ready to paste into spread_model.py ----------------
+    print("\n" + "=" * 98)
+    print("PROPOSED CORRECTED SPIKE_TEMPLATE (from observed NFP mean/max; paste-ready, review before using)")
+    print("=" * 98)
+    print("SPIKE_TEMPLATE = {")
+    for off in range(MIN_OFFSET, MAX_OFFSET + 1):
+        r = nfp_row[off]
+        rng_lo, rng_hi = r["raw_max_range"]
+        print(f"    {off:>2d}: ({r['obs_mean']:.3f}, {r['obs_max']:.3f}),  "
+              f"# raw per-event max ranged {rng_lo:.2f}-{rng_hi:.2f} across events - "
+              f"'obs_max' is their MEAN, a typical-worst-tick figure, not the single worst event")
+    print("}")
+    print("CAVEAT: the max/worst_case column here averages each event's own worst tick. If you want a more")
+    print("conservative stop-loss stress figure, use the upper end of 'raw per-event max ranged X-Y' above")
+    print("(the single worst event seen) instead of the mean shown.")
+
+    print("\nPROPOSED FAMILY_SCALE_FACTOR (implied_scale from Q2, rounded; NFP fixed at 1.00 by construction)")
+    kept_groups = groups[groups["kept"]]
+    for r in rows_out:
+        if r.get("question") != "Q2_scale":
+            continue
+        fam = r["family"]
+        n_ev = r["n_events"]
+        blended_with = set()
+        for _, g in kept_groups[kept_groups["family"] == fam].iterrows():
+            fams_here = {RELEASE_FAMILY.get(n, "NFP") for n in g["merged_names"]}
+            blended_with |= (fams_here - {fam})
+        note = ""
+        if n_ev < 3:
+            note = f"  <- only {n_ev} usable event(s); CI is very wide, treat as unreliable, keep old value"
+        elif blended_with:
+            share_blended = np.mean([bool({RELEASE_FAMILY.get(n, 'NFP') for n in g['merged_names']} - {fam})
+                                     for _, g in kept_groups[kept_groups["family"] == fam].iterrows()])
+            note = (f"  <- {share_blended:.0%} of these events co-released with {'/'.join(sorted(blended_with))} "
+                    f"(see diagnostics above); this is a BLENDED effect, not pure {fam}")
+        print(f"    \"{fam}\": {round(r['implied_scale'], 2)},{note}")
+    print("\nThese are proposals, not yet written into spread_model.py - review the caveats above")
+    print("(especially any family flagged as low-sample or blended) before replacing the existing constants.")
 
 
 if __name__ == "__main__":

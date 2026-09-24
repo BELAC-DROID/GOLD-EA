@@ -1,0 +1,222 @@
+﻿
+
+    Directory: C:\Users\opc\gold_ea
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+d-----         9/21/2026   7:34 PM                AI roadmap and instuctions                                                                                                                                                                    
+d-----         9/21/2026   9:56 PM                archive                                                                                                                                                                                       
+d-----         9/24/2026   6:54 AM                backtest                                                                                                                                                                                      
+d-----         9/24/2026   1:51 AM                data                                                                                                                                                                                          
+d-----         9/24/2026   6:54 AM                diagnostics                                                                                                                                                                                   
+d-----         9/20/2026   1:49 AM                downloads                                                                                                                                                                                     
+d-----         9/19/2026  12:02 AM                live                                                                                                                                                                                          
+d-----         9/24/2026   6:54 AM                loaders                                                                                                                                                                                       
+d-----         9/21/2026   8:04 PM                logs                                                                                                                                                                                          
+d-----         9/24/2026   6:54 AM                models                                                                                                                                                                                        
+d-----         9/19/2026  12:02 AM                mql5                                                                                                                                                                                          
+d-----         9/24/2026   6:54 AM                pipeline                                                                                                                                                                                      
+d-----         9/19/2026  12:02 AM                risk                                                                                                                                                                                          
+d-----         9/19/2026  12:02 AM                setups                                                                                                                                                                                        
+-a----         9/22/2026   1:43 PM            859 .gitignore                                                                                                                                                                                    
+-a----         9/22/2026   8:27 AM           4891 capture_tick_snapshot.py                                                                                                                                                                      
+-a----         9/21/2026  11:45 PM           3986 compare_spread_snapshots.py                                                                                                                                                                   
+-a----         9/24/2026   6:59 AM              0 project-output.txt                                                                                                                                                                            
+
+
+    Directory: C:\Users\opc\gold_ea\AI roadmap and instuctions
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+d-----         9/24/2026   6:50 AM                AI                                                                                                                                                                                            
+
+
+    Directory: C:\Users\opc\gold_ea\AI roadmap and instuctions\AI
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/24/2026   1:42 AM          52604 gold-ea-ai-decision-layer.md                                                                                                                                                                  
+-a----         9/24/2026   6:35 AM          60128 gold-ea-progress.md                                                                                                                                                                           
+-a----         9/21/2026   8:26 PM          18327 gold-ea-roadmap.md                                                                                                                                                                            
+-a----         9/24/2026   6:50 AM          11978 gold-ea-test1-final-findings.md                                                                                                                                                               
+-a----         9/17/2026   3:17 PM           1647 sonnet-focus-prompt.md                                                                                                                                                                        
+
+
+    Directory: C:\Users\opc\gold_ea\archive
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+d-----         9/21/2026   7:55 PM                superseded_2026-09-21                                                                                                                                                                         
+-a----         9/18/2026  11:20 PM        9868056 calendar_history_full.csv                                                                                                                                                                     
+-a----         9/19/2026  10:05 AM           4666 level_reaction.py                                                                                                                                                                             
+-a----         9/19/2026  10:05 AM            856 level_reaction_profile.json                                                                                                                                                                   
+-a----         9/19/2026  11:05 AM           5779 test1_range_walkforward.py                                                                                                                                                                    
+-a----         9/20/2026   1:22 AM           5695 volatility_rhythm_profile_check.json                                                                                                                                                          
+
+
+    Directory: C:\Users\opc\gold_ea\archive\superseded_2026-09-21
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/20/2026   5:39 PM           5275 anomaly_flagging_precision.py                                                                                                                                                                 
+-a----         9/20/2026   5:42 PM           5054 anomaly_flagging_precision_calendar.py                                                                                                                                                        
+-a----         9/20/2026   5:50 PM           4735 cross_timeframe_consistency.py                                                                                                                                                                
+-a----         9/20/2026   1:00 PM           6260 hurst_trend_classification.py                                                                                                                                                                 
+-a----         9/18/2026   4:36 PM           1270 load_dukascopy_to_sqlite.py                                                                                                                                                                   
+-a----         9/20/2026   7:55 AM           3197 range_prediction_window_matrix.py                                                                                                                                                             
+-a----         9/20/2026   1:08 PM           3271 session_open_prediction.py                                                                                                                                                                    
+-a----         9/19/2026  11:54 PM           6025 test1_range_prediction_v2.py                                                                                                                                                                  
+-a----         9/20/2026  12:37 PM           5065 volatility_regime_classification.py                                                                                                                                                           
+
+
+    Directory: C:\Users\opc\gold_ea\backtest
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/21/2026   6:29 PM          12522 anomaly_flagging_v2.py                                                                                                                                                                        
+-a----         9/21/2026   6:31 PM          16852 anomaly_flagging_v2_results.csv                                                                                                                                                               
+-a----         9/23/2026   8:43 PM           6269 build_2026_holdout_bars.py                                                                                                                                                                    
+-a----         9/21/2026   7:31 AM           7241 catalyst_magnitude_prediction.py                                                                                                                                                              
+-a----         9/21/2026   9:02 AM          11347 cross_timeframe_consistency_v2.py                                                                                                                                                             
+-a----         9/21/2026   9:02 AM          13506 cross_timeframe_consistency_v2_results.csv                                                                                                                                                    
+-a----         9/20/2026  12:50 PM           3165 distribution_shape_stability.py                                                                                                                                                               
+-a----         9/23/2026   6:09 AM           6765 distribution_shape_stability_v2a.py                                                                                                                                                           
+-a----         9/23/2026   6:22 AM          58605 distribution_shape_stability_v2a_results.csv                                                                                                                                                  
+-a----         9/23/2026   6:09 AM           3844 distribution_stability_common.py                                                                                                                                                              
+-a----         9/21/2026   7:00 PM           7858 dxy_alignment_check.py                                                                                                                                                                        
+-a----         9/21/2026   7:10 PM           5331 dxy_k_vol_control.py                                                                                                                                                                          
+-a----         9/21/2026  11:24 PM           8565 dxy_k_vol_control_blocks.csv                                                                                                                                                                  
+-a----         9/21/2026   7:04 PM           9575 dxy_metrics_kl.py                                                                                                                                                                             
+-a----         9/21/2026   7:04 PM           1601 dxy_metrics_kl_results.csv                                                                                                                                                                    
+-a----         9/24/2026   1:50 AM           9894 holdout_2026_ch.py                                                                                                                                                                            
+-a----         9/24/2026   1:51 AM           4442 holdout_2026_ch_results.csv                                                                                                                                                                   
+-a----         9/24/2026   1:39 AM          10242 holdout_2026_evaluate.py                                                                                                                                                                      
+-a----         9/24/2026   6:37 AM           3692 holdout_2026_kl.py                                                                                                                                                                            
+-a----         9/24/2026   1:40 AM           2448 holdout_2026_results.csv                                                                                                                                                                      
+-a----         9/20/2026   7:55 AM           2659 level_reaction_window_matrix.py                                                                                                                                                               
+-a----         9/21/2026   8:48 AM          12216 range_prediction_v3_baselines.py                                                                                                                                                              
+-a----         9/21/2026   8:49 AM          13859 range_prediction_v3_results.csv                                                                                                                                                               
+-a----         9/21/2026   1:25 PM           7309 regime_transition_harness.py                                                                                                                                                                  
+-a----         9/23/2026   6:09 AM           4982 return_distribution_stability.py                                                                                                                                                              
+-a----         9/23/2026   6:35 AM          59860 return_distribution_stability_results.csv                                                                                                                                                     
+-a----         9/21/2026   6:30 PM           4909 session_open_prediction_v3.py                                                                                                                                                                 
+-a----         9/21/2026   6:32 PM          14129 session_open_prediction_v3_results.csv                                                                                                                                                        
+-a----         9/22/2026   8:52 PM          19938 spread_model_validation.py                                                                                                                                                                    
+-a----         9/22/2026   9:14 PM           2250 spread_model_validation_results.csv                                                                                                                                                           
+-a----         9/20/2026   1:59 AM           5311 test1_level_reaction_walkforward.py                                                                                                                                                           
+-a----         9/21/2026   6:51 PM           7601 trend_character_v3.py                                                                                                                                                                         
+-a----         9/21/2026   6:52 PM            393 trend_character_v3_results.csv                                                                                                                                                                
+-a----         9/21/2026   1:29 PM           4426 volatility_regime_classification_v3.py                                                                                                                                                        
+-a----         9/21/2026   6:52 PM          12914 volatility_regime_classification_v3_results.csv                                                                                                                                               
+-a----         9/20/2026   7:54 AM           2263 walk_forward_matrix.py                                                                                                                                                                        
+-a----         9/20/2026  12:50 PM           2424 weekend_gap_classification.py                                                                                                                                                                 
+
+
+    Directory: C:\Users\opc\gold_ea\data
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+d-----         9/22/2026   8:28 AM                spread_check                                                                                                                                                                                  
+-a----         9/21/2026   8:12 AM      169357312 analytics.duckdb                                                                                                                                                                              
+-a----         9/23/2026   9:02 PM       11546624 analytics_2026_holdout.duckdb                                                                                                                                                                 
+-a----         9/19/2026   5:55 PM    33037819904 gold_data.db                                                                                                                                                                                  
+-a----         9/24/2026   1:51 AM          32768 gold_data.db-shm                                                                                                                                                                              
+-a----         9/24/2026   1:51 AM              0 gold_data.db-wal                                                                                                                                                                              
+-a----         9/20/2026   1:59 AM           2299 level_reaction_profile_tiered.json                                                                                                                                                            
+-a----         9/18/2026  10:08 PM          14243 nfp_window_spread_profile.json                                                                                                                                                                
+-a----         9/18/2026  10:08 PM          12671 normal_day_spread_profile.json                                                                                                                                                                
+-a----         9/19/2026   7:27 AM            482 session_range_profile.json                                                                                                                                                                    
+-a----         9/19/2026   7:27 AM           5693 volatility_rhythm_profile.json                                                                                                                                                                
+
+
+    Directory: C:\Users\opc\gold_ea\data\spread_check
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/22/2026   8:28 AM        5405212 tick_snapshot_demo_477135209_20260904_1200_1330.csv                                                                                                                                           
+-a----         9/22/2026   8:27 AM        5421050 tick_snapshot_real_296336401_20260904_1200_1330.csv                                                                                                                                           
+
+
+    Directory: C:\Users\opc\gold_ea\diagnostics
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/19/2026  11:59 AM           2595 audit_ticks.py                                                                                                                                                                                
+-a----         9/19/2026  12:29 PM           1041 audit_ticks_dow_breakdown.py                                                                                                                                                                  
+-a----         9/19/2026  11:06 PM           1328 check_analytics_schema.py                                                                                                                                                                     
+-a----         9/19/2026  12:18 AM            442 check_event_breakdown.py                                                                                                                                                                      
+-a----         9/19/2026  12:18 AM           3762 check_exness_data.py                                                                                                                                                                          
+-a----         9/19/2026   9:32 AM           2528 check_gap_artifacts.py                                                                                                                                                                        
+-a----         9/19/2026  11:29 PM           3124 check_level_spacing_by_price.py                                                                                                                                                               
+-a----         9/19/2026  11:24 PM           2783 check_level_spacing_by_year.py                                                                                                                                                                
+-a----         9/19/2026   9:30 AM           2501 check_max_prior_dist.py                                                                                                                                                                       
+-a----         9/21/2026   8:02 AM           3312 check_mt5_dxy_availability.py                                                                                                                                                                 
+-a----         9/21/2026   7:48 AM           3076 check_spread_family_scaling.py                                                                                                                                                                
+-a----         9/19/2026   2:24 PM           1562 check_tick_types.py                                                                                                                                                                           
+-a----         9/20/2026   7:26 AM            524 check_tier2_train_counts.py                                                                                                                                                                   
+-a----         9/19/2026  10:22 AM           4021 check_volatility_rhythm.py                                                                                                                                                                    
+-a----         9/19/2026  12:18 AM            664 find_key_events.py                                                                                                                                                                            
+-a----         9/19/2026   8:42 AM           1895 measure.py                                                                                                                                                                                    
+-a----         9/19/2026   6:47 AM           1771 minute_of_day.py                                                                                                                                                                              
+-a----         9/19/2026  10:13 AM           4271 spot_check_touches.py                                                                                                                                                                         
+-a----         9/21/2026   8:10 AM            894 trim_dxy_placeholder_rows.py                                                                                                                                                                  
+
+
+    Directory: C:\Users\opc\gold_ea\loaders
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/19/2026  12:58 PM           2957 load_dukascopy_2025.py                                                                                                                                                                        
+
+
+    Directory: C:\Users\opc\gold_ea\logs
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/23/2026   6:45 AM            621 notes                                                                                                                                                                                         
+
+
+    Directory: C:\Users\opc\gold_ea\models
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/19/2026   7:19 AM           4877 baseline_profiler.py                                                                                                                                                                          
+-a----         9/19/2026   7:44 AM           3216 build_minute_bars_ohlc.py                                                                                                                                                                     
+-a----         9/20/2026   1:56 AM           4916 level_reaction_core.py                                                                                                                                                                        
+-a----         9/20/2026   1:59 AM           2770 level_reaction_v2.py                                                                                                                                                                          
+-a----         9/19/2026  11:08 PM           3749 rebuild_analytics_duckdb.py                                                                                                                                                                   
+-a----         9/23/2026  12:39 AM          13250 spread_model.py                                                                                                                                                                               
+
+
+    Directory: C:\Users\opc\gold_ea\mql5
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/18/2026  11:19 PM           3539 ExportCalendarHistory.mq5                                                                                                                                                                     
+
+
+    Directory: C:\Users\opc\gold_ea\pipeline
+
+
+Mode                 LastWriteTime         Length Name                                                                                                                                                                                          
+----                 -------------         ------ ----                                                                                                                                                                                          
+-a----         9/19/2026  12:18 AM           1322 load_dukascopy_to_sqlite.py                                                                                                                                                                   
+-a----         9/19/2026   4:47 PM           4704 load_exness_csv.py                                                                                                                                                                            
+-a----         9/21/2026   8:12 AM           1657 pull_dxy_d1_history.py                                                                                                                                                                        
+-a----         9/21/2026   8:05 AM           2319 pull_dxy_history.py                                                                                                                                                                           
+-a----         9/19/2026  12:18 AM           2428 pull_exness_data.py                                                                                                                                                                           
+
+

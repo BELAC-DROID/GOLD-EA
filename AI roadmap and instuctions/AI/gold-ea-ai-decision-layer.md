@@ -400,7 +400,9 @@ Since the baseline generates no trades, it can't be scored on win rate/profit fa
 
 - **Gold/DXY relationship (K, L; 2021-07 to 2025-12):** contemporaneous, strongly negative (1-min correlation -0.38, -0.66 in the 08:25-08:45 New York release window), with no exploitable lead-lag at minute scale. The strength varies a lot by 10-day block (10th/90th percentile -0.69/-0.19) and persists (+0.65 rank correlation between consecutive blocks, confirmed not a volatility artifact - survives controlling for gold's own volatility, +0.61), and was weakest in 2025 (-0.31). Use the trailing ~10-day correlation as a state variable telling the decision layer how much weight to give a simultaneous DXY move; do not treat DXY as a leading indicator.
 
-**Unresolved:** E (distribution-shape stability, descriptive), J spread validation, Asian regime lookback sensitivity, D1-scale power, 2026 holdout.
+- **2026 holdout (A, I; gold averaged ~$4,560 in this window, an all-time-high volatility regime - see gold-ea-progress.md for the market context):** Metric A's trailing-average model still beats the old training-mean approach on %-of-price MAE in every session, but its 2019-2025-calibrated interval widths badly undercover in 2026 (Asian worst: 39%/62% vs 80%/90% target). Metric I is confirmed and stronger out-of-sample on all 4 timeframes. **Design principle drawn from this: any interval or threshold calibrated on a fixed historical window is provisional and should be revisited or made adaptive - the adaptive components (trailing-window model, rolling regime labels) survived the holdout; the fixed calibration (interval quantiles) did not.**
+
+**Unresolved:** E (distribution-shape stability - now confirmed, see progress notes), J spread validation - now done, Asian regime lookback sensitivity, D1-scale power, 2026 holdout for C/H/K/L (A and I done).
 
 ---
 

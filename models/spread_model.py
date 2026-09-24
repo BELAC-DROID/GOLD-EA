@@ -5,28 +5,60 @@ Combines:
   1. A flat time-of-day baseline (from normal_day_spread_profile.json).
   2. An event-driven spike/decay overlay, scaled per release family.
 
-UPDATE (closes the original limitation flagged below): Metric J
-(catalyst magnitude prediction, Phase 3) tested whether NFP's spike
-shape generalizes to the other 4 release families and found it does
-NOT (p<0.0001) - NFP moves gold ~0.365% of price on average, vs CPI
-0.328%, FOMC 0.253%, GDP 0.150%, PCE 0.124%. SPIKE_TEMPLATE below is
-now scaled per family using these measured ratios.
+UPDATE 2 (2026-09-21) - direct spread validation, closing the assumption
+flagged in UPDATE 1 below. backtest/spread_model_validation.py measured
+REAL Exness spread (source='exness_live', 2026-01 to 2026-09) around every
+whitelisted release in that window, instead of relying on Metric J's PRICE-
+magnitude ratios as a stand-in. Two changes came out of it:
 
-ASSUMPTION being made explicit, not proven: this uses price-magnitude
-ratios as a proxy for spread-widening ratios. Metric J measured price
-moves, not spread behavior directly - no one has directly measured
-Exness spread behavior around a GDP or PCE release the way the
-original NFP spike was measured from real tick data. Reasonable
-(bigger moves plausibly cause more liquidity dry-up/slippage) but
-still an assumption, flagged so it isn't mistaken for a second
-confirmed fact.
+  (a) SPIKE_TEMPLATE's MEAN column was recalibrated from 8 real NFP events,
+      not the single Sept 4 event. That one event turned out to be an
+      outlier: its own peak multiplier (1.96x) sat above the top of the
+      8-event 95% CI (1.30-1.90x), and the decay tail (offsets 6-8) runs a
+      bit longer than the old template assumed (observed ~1.04-1.05x vs
+      template's ~1.01x, CIs not overlapping). The MAX (worst_case) column
+      was left at whichever is larger, the old value or the worst single
+      tick actually observed across those 8 events (a "never get less
+      conservative" rule) - the old Sept-4-derived max was already close
+      to the observed worst case at most offsets (it WAS the single
+      worst-observed event before this update), so most max values are
+      unchanged; two offsets got a small upward revision. n=8 is still a
+      small sample for a worst-case figure - revisit as more NFP events
+      accumulate, don't treat the max column as final.
 
-ORIGINAL LIMITATION (now addressed above, kept for history): the base
-spike shape (offsets -1 to +8, "shock then decay") is derived from
-exactly ONE observed event - the Sept 4, 2026 NFP release - and was
-originally applied uniformly to every event type. The per-family
-scaling above corrects for amplitude; the underlying shock-then-decay
-SHAPE itself is still only validated against that one NFP event.
+  (b) FAMILY_SCALE_FACTOR: CPI (0.91) and FOMC (0.74) were confirmed close
+      to their old price-magnitude-derived values (0.90, 0.69) and updated
+      to the directly-measured spread figures. GDP and PCE could NOT be
+      validated as separate families: the calendar data shows Core PCE
+      Price Index m/m and y/y co-release with GDP q/q at the exact same
+      timestamp in ~89% of instances (confirmed by the BEA's own release
+      schedule) - spread_model.py's own same-timestamp collision handling
+      (nearest_event_group, below) already assigns these to whichever name
+      has the larger scale factor, so "GDP" events in this dataset were
+      already mostly a blended GDP+PCE effect, not pure GDP, and pure PCE
+      only occurred once in this window (not enough to estimate on its
+      own). Rather than keep two separate constants where one is
+      contaminated by the other and the other is nearly unmeasurable, GDP
+      and PCE are merged into one honestly-labeled family, GDP_PCE, scale
+      0.28 (the measured blended figure). If a future calendar or release
+      schedule change causes GDP and PCE to reliably occur independently,
+      re-run spread_model_validation.py and consider splitting them again.
+
+UPDATE 1 (prior): Metric J (catalyst magnitude prediction, Phase 3) tested
+whether NFP's spike shape generalizes to the other release families using
+PRICE-magnitude ratios (NFP 0.365% of price, CPI 0.328%, FOMC 0.253%, GDP
+0.150%, PCE 0.124%) as a proxy for spread widening, since no one had
+directly measured Exness spread behavior around those releases. UPDATE 2
+above replaces that proxy with direct measurement; the price-magnitude
+ratios are kept here for the history but are no longer what
+FAMILY_SCALE_FACTOR is built from.
+
+ORIGINAL LIMITATION (addressed by UPDATE 2's (a) above, kept for history):
+the base spike shape (offsets -1 to +8, "shock then decay") was originally
+derived from exactly ONE observed event - the Sept 4, 2026 NFP release -
+applied uniformly to every event type, then later scaled by family via the
+price-magnitude proxy in UPDATE 1. The MEAN column is now an 8-event
+average; the MAX column is still driven by a small sample (see (a) above).
 """
 
 import sqlite3
@@ -38,19 +70,22 @@ DB_PATH = r"C:\Users\opc\gold_ea\data\gold_data.db"
 BASELINE_PROFILE_PATH = r"C:\Users\opc\gold_ea\data\normal_day_spread_profile.json"
 
 # Minute offset relative to event time -> (mean_multiplier, max_multiplier).
-# This is the NFP-calibrated reference shape - per-family scaling is
-# applied on top of this at lookup time, not baked in here.
+# MEAN column: recalibrated 2026-09-21 from 8 real NFP events in
+# ticks(source='exness_live'), replacing the single-event Sept 4 figures
+# (see backtest/spread_model_validation.py, Q1). MAX column: max(old value,
+# worst single tick observed across those 8 events) - see UPDATE 2(a) above.
+# Per-family scaling is applied on top of this at lookup time, not baked in.
 SPIKE_TEMPLATE = {
-    -1: (1.15, 1.85),
-     0: (1.96, 7.69),
-     1: (1.24, 2.23),
-     2: (1.30, 2.23),
-     3: (1.40, 2.23),
-     4: (1.15, 2.23),
-     5: (1.04, 1.31),
-     6: (1.01, 1.31),
-     7: (1.01, 1.31),
-     8: (1.02, 1.31),
+    -1: (0.948, 2.310),
+     0: (1.577, 7.690),
+     1: (1.229, 2.230),
+     2: (1.112, 2.230),
+     3: (1.102, 2.230),
+     4: (1.065, 2.230),
+     5: (1.054, 1.390),
+     6: (1.050, 1.390),
+     7: (1.043, 1.390),
+     8: (1.047, 1.390),
 }
 MIN_OFFSET = min(SPIKE_TEMPLATE)
 MAX_OFFSET = max(SPIKE_TEMPLATE)
@@ -74,30 +109,39 @@ EVENT_NAME_WHITELIST = (
 # Maps each whitelisted event name to its release family - same mapping
 # used in Metric J's catalyst_magnitude_prediction.py, so the two stay
 # consistent with each other.
+#
+# GDP q/q and both Core PCE Price Index names now map to the SAME family,
+# "GDP_PCE" (2026-09-21) - see UPDATE 2(b) above. They were kept separate
+# in catalyst_magnitude_prediction.py's own PRICE-magnitude analysis (that
+# script measures price moves per event NAME, which is still meaningful
+# even when two names share a timestamp); it is specifically the SPREAD
+# scale factor below where keeping them separate was misleading, since one
+# was almost always measuring the other's effect too.
 RELEASE_FAMILY = {
     "Nonfarm Payrolls": "NFP",
     "CPI": "CPI", "CPI y/y": "CPI", "CPI m/m": "CPI",
     "Core CPI m/m": "CPI", "Core CPI n.s.a. m/m": "CPI",
-    "Core PCE Price Index m/m": "PCE", "Core PCE Price Index y/y": "PCE",
+    "Core PCE Price Index m/m": "GDP_PCE", "Core PCE Price Index y/y": "GDP_PCE",
     "FOMC Statement": "FOMC", "FOMC Press Conference": "FOMC",
-    "GDP q/q": "GDP",
+    "GDP q/q": "GDP_PCE",
 }
 
 # Per-family scale factor applied to the (multiplier - 1) excess over
-# baseline, derived from Metric J's measured mean price-magnitude per
-# family, each relative to NFP (the template's own calibration source,
-# hence 1.00). See module docstring for the assumption this rests on.
-#   NFP: 0.365% of price (reference, ratio = 1.00)
-#   CPI: 0.328% -> 0.328/0.365 = 0.90
-#   FOMC: 0.253% -> 0.253/0.365 = 0.69
-#   GDP: 0.150% -> 0.150/0.365 = 0.41
-#   PCE: 0.124% -> 0.124/0.365 = 0.34
+# baseline. Recalibrated 2026-09-21 from directly-measured spread widening
+# (backtest/spread_model_validation.py, Q2), replacing the original
+# PRICE-magnitude-derived values (NFP 1.00, CPI 0.90, FOMC 0.69, GDP 0.41,
+# PCE 0.34 - see UPDATE 1 above for how those were derived).
+#   NFP: 1.00 (reference, by construction - the template itself is NFP's own shape)
+#   CPI: 0.91 (measured; old price-magnitude estimate was 0.90 - confirmed)
+#   FOMC: 0.74 (measured; old estimate was 0.69 - close, small upward revision)
+#   GDP_PCE: 0.28 (measured blended GDP+PCE figure - see UPDATE 2(b); n=9
+#     anchors, 89% of which were an actual GDP+PCE co-release, so this
+#     number describes that combined event, not GDP or PCE in isolation)
 FAMILY_SCALE_FACTOR = {
     "NFP": 1.00,
-    "CPI": 0.90,
-    "FOMC": 0.69,
-    "GDP": 0.41,
-    "PCE": 0.34,
+    "CPI": 0.91,
+    "FOMC": 0.74,
+    "GDP_PCE": 0.28,
 }
 
 
@@ -137,7 +181,18 @@ def nearest_event_group(ts_ms, sorted_events):
     nearest timestamp, not just one. Fixes the earlier same-timestamp
     collision bug (e.g. GDP q/q and Core PCE Price Index y/y, which the BEA
     routinely releases together - confirmed happening in real data via
-    diagnostics/check_spread_family_scaling.py, 2026-12-23 13:30).
+    diagnostics/check_spread_family_scaling.py, 2026-12-23 13:30, and again
+    via spread_model_validation.py's event diagnostics, 2026-09-21, in ~89%
+    of GDP q/q occurrences).
+
+    NOTE (2026-09-21): since GDP q/q and both Core PCE Price Index names now
+    map to the same family (GDP_PCE, see RELEASE_FAMILY above), this
+    specific collision no longer needs the max-scale tie-break below to
+    produce a sensible answer - both names resolve to the same family and
+    scale regardless of which one "wins". The tie-break logic is kept
+    general, since some other coincidental collision (e.g. an unscheduled
+    calendar overlap between families not designed to co-release) could
+    still occur and needs a defined behavior.
     """
     if not sorted_events:
         return None, []
@@ -172,7 +227,10 @@ def get_simulated_spread(ts_ms, profile, sorted_events, mode="mean"):
     LARGEST scale factor - the spread itself uses that same max scale
     factor too, since a risk-facing spread model should reflect the
     stronger of two coinciding effects, not an average that could
-    understate real widening.
+    understate real widening. As of 2026-09-21 this only matters for a
+    collision between families that don't already share one (see
+    RELEASE_FAMILY note above) - GDP q/q and Core PCE Price Index events no
+    longer need this tie-break to reach the right family.
     """
     base = baseline_spread(ts_ms, profile)
     offset, event_names = nearest_event_group(ts_ms, sorted_events)
